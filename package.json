@@ -10,10 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@radix-ui/react-collapsible": "^1.1.12",
     "@tailwindcss/vite": "^4.1.18",
     "lucide-react": "^0.563.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "tailwind-merge": "^3.4.0",
+    "tailwind-variants": "^3.2.2",
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
