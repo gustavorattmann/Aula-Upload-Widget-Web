@@ -13,4 +13,6 @@
     inset 0px 1px 0px rgba(255, 255, 255, 0.02),
     inset 0px 0px 0px 1px rgba(255, 255, 255, 0.02);
   --opacity-2: 0.02;
+  --text-xxs: 0.625rem;
+  --text-xxs--line-height: 1rem;
 }
