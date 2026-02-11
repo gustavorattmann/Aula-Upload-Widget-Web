@@ -3,6 +3,7 @@ import { immer } from "zustand/middleware/immer";
 import { enableMapSet } from "immer";
 import { uploadFileToStorage } from "../http/upload-file-to-storage";
 import { CanceledError } from "axios";
+import { useShallow } from "zustand/shallow";
 
 enableMapSet();
 
@@ -20,11 +21,23 @@ type UploadState = {
   addUploads: (files: File[]) => void;
   proccessUpload: (uploadId: string) => Promise<void>;
   cancelUpload: (uploadId: string) => void;
+  updateUpload: (uploadId: string, data: Partial<Upload>) => void;
 };
 
 export const useUploads = create<UploadState>()(
   immer((set, get) => ({
     uploads: new Map(),
+    updateUpload: (uploadId: string, data: Partial<Upload>) => {
+      const upload = get().uploads.get(uploadId);
+
+      if (!upload) {
+        return;
+      }
+
+      set((state) => {
+        state.uploads.set(uploadId, { ...upload, ...data });
+      });
+    },
     proccessUpload: async (uploadId: string) => {
       const upload = get().uploads.get(uploadId);
 
@@ -39,32 +52,21 @@ export const useUploads = create<UploadState>()(
           {
             file: upload.file,
             onProgress: (sizeInBytes) => {
-              set((state) => {
-                state.uploads.set(uploadId, {
-                  ...upload,
-                  uploadSizeInBytes: sizeInBytes,
-                });
-              });
+              get().updateUpload(uploadId, { uploadSizeInBytes: sizeInBytes });
             },
           },
           { signal: upload.abortController.signal },
         );
 
-        set((state) => {
-          state.uploads.set(uploadId, { ...upload, status: "success" });
-        });
+        get().updateUpload(uploadId, { status: "success" });
       } catch (err) {
         if (err instanceof CanceledError) {
-          set((state) => {
-            state.uploads.set(uploadId, { ...upload, status: "canceled" });
-          });
+          get().updateUpload(uploadId, { status: "canceled" });
 
           return;
         }
 
-        set((state) => {
-          state.uploads.set(uploadId, { ...upload, status: "error" });
-        });
+        get().updateUpload(uploadId, { status: "error" });
       }
     },
     addUploads: (files: File[]) => {
@@ -103,3 +105,34 @@ export const useUploads = create<UploadState>()(
     },
   })),
 );
+
+export const usePendingUploads = () => {
+  return useUploads(
+    useShallow((store) => {
+      const isThereAnyPendingUploads = Array.from(store.uploads.values()).some(
+        (upload) => upload.status === "progress",
+      );
+
+      if (!isThereAnyPendingUploads) {
+        return { isThereAnyPendingUploads, globalPercentage: 100 };
+      }
+
+      const { total, uploaded } = Array.from(store.uploads.values()).reduce(
+        (acc, upload) => {
+          acc.total += upload.originalSizeInBytes;
+          acc.uploaded += upload.uploadSizeInBytes;
+
+          return acc;
+        },
+        { total: 0, uploaded: 0 },
+      );
+
+      const globalPercentage = Math.min(
+        Math.round((uploaded * 100) / total),
+        100,
+      );
+
+      return { isThereAnyPendingUploads, globalPercentage };
+    }),
+  );
+};
