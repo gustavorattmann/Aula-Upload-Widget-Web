@@ -4,6 +4,7 @@ import { enableMapSet } from "immer";
 import { uploadFileToStorage } from "../http/upload-file-to-storage";
 import { CanceledError } from "axios";
 import { useShallow } from "zustand/shallow";
+import { compressImage } from "../utils/compress-image";
 
 enableMapSet();
 
@@ -48,9 +49,16 @@ export const useUploads = create<UploadState>()(
       }
 
       try {
+        const compressedFile = await compressImage({
+          file: upload.file,
+          maxWidth: 200,
+          maxHeight: 200,
+          quality: 0.5,
+        });
+
         await uploadFileToStorage(
           {
-            file: upload.file,
+            file: compressedFile,
             onProgress: (sizeInBytes) => {
               get().updateUpload(uploadId, { uploadSizeInBytes: sizeInBytes });
             },
@@ -60,6 +68,7 @@ export const useUploads = create<UploadState>()(
 
         get().updateUpload(uploadId, { status: "success" });
       } catch (err) {
+        console.error("Error uploading file:", err);
         if (err instanceof CanceledError) {
           get().updateUpload(uploadId, { status: "canceled" });
 
