@@ -11,7 +11,7 @@ enableMapSet();
 export type Upload = {
   name: string;
   file: File;
-  abortController: AbortController;
+  abortController?: AbortController;
   status: "progress" | "success" | "error" | "canceled";
   originalSizeInBytes: number;
   compressedSizeInBytes?: number;
@@ -24,6 +24,7 @@ type UploadState = {
   addUploads: (files: File[]) => void;
   proccessUpload: (uploadId: string) => Promise<void>;
   cancelUpload: (uploadId: string) => void;
+  retryUpload: (uploadId: string) => void;
   updateUpload: (uploadId: string, data: Partial<Upload>) => void;
 };
 
@@ -44,11 +45,19 @@ export const useUploads = create<UploadState>()(
     proccessUpload: async (uploadId: string) => {
       const upload = get().uploads.get(uploadId);
 
-      console.log("Processing upload:", upload);
-
       if (!upload) {
         return;
       }
+
+      const abortController = new AbortController();
+
+      get().updateUpload(uploadId, {
+        uploadSizeInBytes: 0,
+        compressedSizeInBytes: undefined,
+        remoteUrl: undefined,
+        abortController,
+        status: "progress",
+      });
 
       try {
         const compressedFile = await compressImage({
@@ -69,7 +78,7 @@ export const useUploads = create<UploadState>()(
               get().updateUpload(uploadId, { uploadSizeInBytes: sizeInBytes });
             },
           },
-          { signal: upload.abortController.signal },
+          { signal: abortController?.signal },
         );
 
         get().updateUpload(uploadId, { status: "success", remoteUrl: url });
@@ -86,12 +95,10 @@ export const useUploads = create<UploadState>()(
     addUploads: (files: File[]) => {
       for (const file of files) {
         const uploadId = crypto.randomUUID();
-        const abortController = new AbortController();
 
         const upload: Upload = {
           name: file.name,
           file,
-          abortController,
           status: "progress",
           originalSizeInBytes: file.size,
           uploadSizeInBytes: 0,
@@ -111,11 +118,14 @@ export const useUploads = create<UploadState>()(
         return;
       }
 
-      upload.abortController.abort();
+      upload.abortController?.abort();
 
       set((state) => {
         state.uploads.set(uploadId, { ...upload, status: "canceled" });
       });
+    },
+    retryUpload: (uploadId: string) => {
+      get().proccessUpload(uploadId);
     },
   })),
 );
